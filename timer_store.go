@@ -1,9 +1,8 @@
 package timerstore
 
 import (
+	"fmt"
 	"time"
-
-	"dana-tech.com/wbw/logs"
 )
 
 var providerMgr = make(map[string]Provider)
@@ -71,7 +70,7 @@ func (t *TimerStore) process() {
 	time.AfterFunc(t.interval, func() {
 		due, ok, err := t.store.Before(time.Now().Unix())
 		if err != nil {
-			logs.Logger.Errorf("%s", err.Error())
+			fmt.Printf("%s\n", err.Error())
 		}
 		if ok {
 			for key, val := range due {

@@ -73,13 +73,11 @@ func (r *redisProvider) Set(key string, val string, ttl int64) error {
 
 	err := DaClient.Get(storeKey).Err()
 	if err != nil && err.Error() != nilMsg {
-		logs.Logger.Errorf("get key: %s error %s", storeKey, err.Error())
 		return err
 	}
 	if err == nil {
 		// 有旧值存在, 需要删除旧值
 		if err = r.Del(key); err != nil {
-			logs.Logger.Errorf("%s", err.Error())
 			return err
 		}
 	}
@@ -87,12 +85,10 @@ func (r *redisProvider) Set(key string, val string, ttl int64) error {
 	var storeKeys []string
 	keysBytes, err := DaClient.Get(timerKey).Bytes()
 	if err != nil && err.Error() != nilMsg {
-		logs.Logger.Errorf("get key: %s error: %s", timerKey, err.Error())
 		return err
 	}
 	if err == nil {
 		if err = json.Unmarshal(keysBytes, &storeKeys); err != nil {
-			logs.Logger.Errorf("unmarshal data: %v error: %v", string(keysBytes), err.Error())
 			return err
 		}
 	}
@@ -101,19 +97,16 @@ func (r *redisProvider) Set(key string, val string, ttl int64) error {
 	keysBytes, _ = json.Marshal(storeKeys)
 
 	if err = DaClient.Set(storeKey, string(data), time.Duration(0)).Err(); err != nil {
-		logs.Logger.Errorf("set storeKey: %s error: %s", storeKey, err.Error())
 		return err
 	}
 
 	if err = DaClient.Set(timerKey, string(keysBytes), time.Duration(0)).Err(); err != nil {
-		logs.Logger.Errorf("set timerKey: %s error: %s", timerKey, err.Error())
 		return err
 	}
 
 	if err = DaClient.ZAdd(setKey, NewZ(due, timerKey)).Err(); err != nil {
 		if len(storeKeys) == 1 {
 			// 重复添加相同元素,可能会导致redis返回错误
-			logs.Logger.Errorf("zadd sorted set key: %s value: %s error: %v", setKey, timerKey, err.Error())
 			return err
 		}
 		logs.Logger.Debugf("zadd sorted set key: %s value: %s, error: %v", setKey, timerKey, err.Error())
@@ -126,43 +119,36 @@ func (r *redisProvider) Del(key string) error {
 	storeKey := fmt.Sprintf("%s:%s", r.prefix, key)
 	data, err := DaClient.Get(storeKey).Bytes()
 	if err != nil && err.Error() != nilMsg {
-		logs.Logger.Errorf("get key: %s error %s", storeKey, err.Error())
 		return err
 	}
 	if err == nil {
 		var ent entry
 		if err = json.Unmarshal(data, &ent); err != nil {
-			logs.Logger.Errorf("unmarshal data: %v error: %s", string(data), err.Error())
 			return err
 		}
 
 		storeKeysBytes, err := DaClient.Get(ent.TimerKey).Bytes()
 		if err != nil {
-			logs.Logger.Errorf("get key: %s error %s", ent.TimerKey, err.Error())
 			return err
 		}
 		var storeKeys []string
 		if err = json.Unmarshal(storeKeysBytes, &storeKeys); err != nil {
-			logs.Logger.Errorf("unmarshal data: %v error %v", string(storeKeysBytes), err.Error())
 			return err
 		}
 		storeKeys = delItem(storeKeys, storeKey)
 
 		if len(storeKeys) == 0 {
 			if err = DaClient.Del(ent.TimerKey).Err(); err != nil {
-				logs.Logger.Errorf("delete key: %s error: %s", ent.TimerKey, err.Error())
 				return err
 			}
 		} else {
 			storeKeysBytes, _ = json.Marshal(storeKeys)
 			if err = DaClient.Set(ent.TimerKey, string(storeKeysBytes), time.Duration(0)).Err(); err != nil {
-				logs.Logger.Errorf("set key: %s error %s", ent.TimerKey, err.Error())
 				return err
 			}
 		}
 
 		if err = DaClient.Del(storeKey).Err(); err != nil {
-			logs.Logger.Errorf("delete key: %s error: %s", storeKey, err.Error())
 			return err
 		}
 	}
@@ -185,7 +171,6 @@ func (r *redisProvider) Before(t int64) (map[string]string, bool, error) {
 			if err.Error() == nilMsg {
 				break
 			}
-			logs.Logger.Errorf("zrange %v %v %v error %v", setKey, 0, 100, err.Error())
 			return nil, false, err
 		}
 
@@ -193,26 +178,21 @@ func (r *redisProvider) Before(t int64) (map[string]string, bool, error) {
 			isOver = true
 		}
 
-		fmt.Printf("===> isOver: %v, len: %v, keys: %v\n", isOver, len(timerKeys), timerKeys)
-
 		for _, k := range timerKeys {
 			if k <= timerKey {
 				storeKeysBytes, err := DaClient.Get(k).Bytes()
 				if err != nil && err.Error() != nilMsg {
-					logs.Logger.Errorf("get key: %s error %s", k, err.Error())
 					return nil, false, err
 				}
 				if err == nil {
 					var storeKeys []string
 					if err = json.Unmarshal(storeKeysBytes, &storeKeys); err != nil {
-						logs.Logger.Errorf("unmarshal data: %v error %s", string(storeKeysBytes), err.Error())
 						return nil, false, err
 					}
 					for _, storeKey := range storeKeys {
 						key := retrieveKey(storeKey)
 						data, has, err := r.Get(key)
 						if err != nil {
-							logs.Logger.Errorf("get key: %s error: %v", storeKey, err.Error())
 							return nil, false, err
 						}
 						if has {
@@ -230,7 +210,6 @@ func (r *redisProvider) Before(t int64) (map[string]string, bool, error) {
 
 		if len(removes) > 0 {
 			if err := DaClient.ZRem(setKey, removes...).Err(); err != nil {
-				logs.Logger.Errorf("zrem key %s value %v error: %v", setKey, removes, err.Error())
 				return nil, false, err
 			}
 		}
